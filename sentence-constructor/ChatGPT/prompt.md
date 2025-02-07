@@ -7,7 +7,6 @@ Beginner, JLPT5
 ## Creator
 Ramon Insaurralde
 
-
 ## Teching Instructions:
 
 - the student is going to provide you an english sentence.
