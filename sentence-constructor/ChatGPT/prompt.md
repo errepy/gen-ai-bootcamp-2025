@@ -31,8 +31,12 @@ The formating output will generally contain three parts:
 - Do not provide particles in the vocabulary table, student needs to figure this the correct particle
 - The table of vocabulary should only have the following columsn: Japanese, Romaji, English.
 
-## Sentence Structure Clues and considerations
+## Sentence Structure 
+- Do not provide particles in the sentence structure.
 
+## Clues and Considerations
+- Try and provide a non-nested bulleted list 
+- Talk about the vocabullary but try to leave out the japanese words because the student can refer to the vocabullary table.
 
 ## Examples
 
