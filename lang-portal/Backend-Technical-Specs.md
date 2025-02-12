@@ -1,7 +1,7 @@
-# Backend Technical Specs
+# Backend Server Technical Sepcs
 
+## Business Goal:
 
-# Business Goal: 
 A language learning school wants to build a prototype of learning portal which will act as three things:
 - Inventory of possible vocabulary that can be learned
 - Act as a  Learning record store (LRS), providing correct and wrong score on practice vocabulary
@@ -9,86 +9,417 @@ A language learning school wants to build a prototype of learning portal which w
 
 ## Technical Requirements
 
-- The backend is to be built using FastAPI
-- The frontend is to be built using 
-- The database is to be built using PostgreSQL
-- The API will allways return JSON
+- The backend will be built using Go
+- The database will be SQLite3
+- The API will be built using Gin
+-Mage is a task runner for Go.
+- The API will always return JSON
+- There will no authentication or authorization
+- Everything be treated as a single user
 
-Here is the **database schema** with precise **foreign key (FK) references**:
+## Directory Structure
 
----
+```text
+backend_go/
+├── cmd/
+│   └── server/
+├── internal/
+│   ├── models/     # Data structures and database operations
+│   ├── handlers/   # HTTP handlers organized by feature (dashboard, words, groups, etc.)
+│   └── service/    # Business logic
+├── db/
+│   ├── migrations/
+│   └── seeds/      # For initial data population
+├── magefile.go
+├── go.mod
+└── words.db
+```
 
-## **Database Schema**
+## Database Schema
+
+Our database will be a single sqlite database called `words.db` that will be in the root of the project folder of `backend_go`
 
 We have the following tables:
+- words - stored vocabulary words
+  - id integer
+  - japasese string
+  - romaji string
+  - english string
+  - parts json
+- words_groups - join table for words and groups many-to-many
+  - id integer
+  - word_id integer
+  - group_id integer
+- groups - thematic groups of words
+  - id integer
+  - name string
+- study_sessions - records of study sessions grouping word_review_items
+  - id integer
+  - group_id integer
+  - created_at datetime
+  - study_activity_id integer
+- study_activities - a specific study activity, linking a study session to group
+  - id integer
+  - study_session_id integer
+  - group_id integer
+  - created_at datetime
+- word_review_items - a record of word practice, determining if the word was correct or not
+  - word_id integer
+  - study_session_id integer
+  - correct boolean
+  - created_at datetime
 
-### **words**  
-Stores information about words in different formats.  
-- `id` (int, PK) - Unique identifier for the word.  
-- `kanji` (string) - Kanji representation.  
-- `romaji` (string) - Romaji representation.  
-- `english` (string) - English translation.  
-- `parts` (json) - Additional information about the word.  
+## API Endpoints
 
----
+### GET /api/dashboard/last_study_session
+Returns information about the most recent study session.
 
-### **groups**  
-Represents a group of words.  
-- `id` (int, PK) - Unique identifier for the group.  
-- `name` (string) - Name of the group.  
-- `words_count` (int) - Number of words in the group.  
+#### JSON Response
+```json
+{
+  "id": 123,
+  "group_id": 456,
+  "created_at": "2025-02-08T17:20:23-05:00",
+  "study_activity_id": 789,
+  "group_id": 456,
+  "group_name": "Basic Greetings"
+}
+```
 
----
+### GET /api/dashboard/study_progress
+Returns study progress statistics.
+Please note that the frontend will determine progress bar basedon total words studied and total available words.
 
-### **word_groups** (join table)  
-Intermediate table for the **many-to-many** relationship between `words` and `groups`.  
-- `word_id` (int, FK) - References `words.id`.  
-- `group_id` (int, FK) - References `groups.id`.  
+#### JSON Response
 
----
+```json
+{
+  "total_words_studied": 3,
+  "total_available_words": 124,
+}
+```
 
-### **study_activities**  
-List of available study activities.  
-- `id` (int, PK) - Unique identifier for the study activity.  
-- `name` (string) - Name of the activity.  
-- `url` (string) - URL associated with the activity.  
+### GET /api/dashboard/quick-stats
 
----
+Returns quick overview statistics.
 
-### **study_sessions**  
-Represents a study session linked to a group and a study activity.  
-- `id` (int, PK) - Unique identifier for the session.  
-- `group_id` (int, FK) - References `groups.id` (group being studied in the session).  
-- `study_activity_id` (int, FK) - References `study_activities.id` (study activity performed).  
-- `created_at` (timestamp) - Date and time the session was created.  
+#### JSON Response
+```json
+{
+  "success_rate": 80.0,
+  "total_study_sessions": 4,
+  "total_active_groups": 3,
+  "study_streak_days": 4
+}
+```
 
----
+### GET /api/study_activities/:id
 
-### **word_review_items**  
-Records word reviews within a study session.  
-- `id` (int, PK) - Unique identifier for the review item.  
-- `word_id` (int, FK) - References `words.id` (word being reviewed).  
-- `study_session_id` (int, FK) - References `study_sessions.id` (session in which the word was reviewed).  
-- `correct` (boolean) - Indicates whether the response was correct.  
-- `created_at` (timestamp) - Date and time of the review.  
+#### JSON Response
+```json
+{
+  "id": 1,
+  "name": "Vocabulary Quiz",
+  "thumbnail_url": "https://example.com/thumbnail.jpg",
+  "description": "Practice your vocabulary with flashcards"
+}
+```
 
----
+### GET /api/study_activities/:id/study_sessions
 
-### **Key Relationships**  
-1. `words` and `groups` have a **many-to-many** relationship through `word_groups`.  
-2. `study_sessions` is linked to a `group` and a `study_activity`.  
-3. `word_review_items` connects `words` with `study_sessions` to track reviews.  
+- pagination with 100 items per page
 
+```json
+{
+  "items": [
+    {
+      "id": 123,
+      "activity_name": "Vocabulary Quiz",
+      "group_name": "Basic Greetings",
+      "start_time": "2025-02-08T17:20:23-05:00",
+      "end_time": "2025-02-08T17:30:23-05:00",
+      "review_items_count": 20
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 5,
+    "total_items": 100,
+    "items_per_page": 20
+  }
+}
+```
 
-### API Endpoints
+### POST /api/study_activities
 
-- `GET /words` - Retrieve a list of all words
-- `GET /words/{word_id}` - Retrieve details of a specific word
-- `GET /groups` - Retrieve a list of all groups
-- `GET /groups/{group_id}` - Retrieve details of a specific group
-- `GET /study-activities` - Retrieve a list of all study activities
-- `GET /study-activities/{study_activity_id}` - Retrieve details of a specific study activity
-- `POST /study-sessions` - Create a new study session
-- `GET /study-sessions/{study_session_id}` - Retrieve details of a specific study session
-- `POST /word-reviews` - Create a new word review
-- `GET /word-reviews/{word_review_id}` - Retrieve details of a specific word review
+#### Request Params
+- group_id integer
+- study_activity_id integer
+
+#### JSON Response
+{
+  "id": 124,
+  "group_id": 123
+}
+
+### GET /api/words
+
+- pagination with 100 items per page
+
+#### JSON Response
+```json
+{
+  "items": [
+    {
+      "japanese": "こんにちは",
+      "romaji": "konnichiwa",
+      "english": "hello",
+      "correct_count": 5,
+      "wrong_count": 2
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 5,
+    "total_items": 500,
+    "items_per_page": 100
+  }
+}
+```
+
+### GET /api/words/:id
+#### JSON Response
+```json
+{
+  "japanese": "こんにちは",
+  "romaji": "konnichiwa",
+  "english": "hello",
+  "stats": {
+    "correct_count": 5,
+    "wrong_count": 2
+  },
+  "groups": [
+    {
+      "id": 1,
+      "name": "Basic Greetings"
+    }
+  ]
+}
+```
+
+### GET /api/groups
+- pagination with 100 items per page
+#### JSON Response
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "Basic Greetings",
+      "word_count": 20
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 1,
+    "total_items": 10,
+    "items_per_page": 100
+  }
+}
+```
+
+### GET /api/groups/:id
+#### JSON Response
+```json
+{
+  "id": 1,
+  "name": "Basic Greetings",
+  "stats": {
+    "total_word_count": 20
+  }
+}
+```
+
+### GET /api/groups/:id/words
+#### JSON Response
+```json
+{
+  "items": [
+    {
+      "japanese": "こんにちは",
+      "romaji": "konnichiwa",
+      "english": "hello",
+      "correct_count": 5,
+      "wrong_count": 2
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 1,
+    "total_items": 20,
+    "items_per_page": 100
+  }
+}
+```
+
+### GET /api/groups/:id/study_sessions
+#### JSON Response
+```json
+{
+  "items": [
+    {
+      "id": 123,
+      "activity_name": "Vocabulary Quiz",
+      "group_name": "Basic Greetings",
+      "start_time": "2025-02-08T17:20:23-05:00",
+      "end_time": "2025-02-08T17:30:23-05:00",
+      "review_items_count": 20
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 1,
+    "total_items": 5,
+    "items_per_page": 100
+  }
+}
+```
+
+### GET /api/study_sessions
+- pagination with 100 items per page
+#### JSON Response
+```json
+{
+  "items": [
+    {
+      "id": 123,
+      "activity_name": "Vocabulary Quiz",
+      "group_name": "Basic Greetings",
+      "start_time": "2025-02-08T17:20:23-05:00",
+      "end_time": "2025-02-08T17:30:23-05:00",
+      "review_items_count": 20
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 5,
+    "total_items": 100,
+    "items_per_page": 100
+  }
+}
+```
+
+### GET /api/study_sessions/:id
+#### JSON Response
+```json
+{
+  "id": 123,
+  "activity_name": "Vocabulary Quiz",
+  "group_name": "Basic Greetings",
+  "start_time": "2025-02-08T17:20:23-05:00",
+  "end_time": "2025-02-08T17:30:23-05:00",
+  "review_items_count": 20
+}
+```
+
+### GET /api/study_sessions/:id/words
+- pagination with 100 items per page
+#### JSON Response
+```json
+{
+  "items": [
+    {
+      "japanese": "こんにちは",
+      "romaji": "konnichiwa",
+      "english": "hello",
+      "correct_count": 5,
+      "wrong_count": 2
+    }
+  ],
+  "pagination": {
+    "current_page": 1,
+    "total_pages": 1,
+    "total_items": 20,
+    "items_per_page": 100
+  }
+}
+```
+
+### POST /api/reset_history
+#### JSON Response
+```json
+{
+  "success": true,
+  "message": "Study history has been reset"
+}
+```
+
+### POST /api/full_reset
+#### JSON Response
+```json
+{
+  "success": true,
+  "message": "System has been fully reset"
+}
+```
+
+### POST /api/study_sessions/:id/words/:word_id/review
+#### Request Params
+- id (study_session_id) integer
+- word_id integer
+- correct boolean
+
+#### Request Payload
+```json
+{
+  "correct": true
+}
+```
+
+#### JSON Response
+```json
+{
+  "success": true,
+  "word_id": 1,
+  "study_session_id": 123,
+  "correct": true,
+  "created_at": "2025-02-08T17:33:07-05:00"
+}
+```
+
+## Task Runner Tasks
+
+Lets list out possible tasks we need for our lang portal.
+
+### Initialize Database
+This task will initialize the sqlite database called `words.db
+
+### Migrate Database
+This task will run a series of migrations sql files on the database
+
+Migrations live in the `migrations` folder.
+The migration files will be run in order of their file name.
+The file names should looks like this:
+
+```sql
+0001_init.sql
+0002_create_words_table.sql
+```
+
+### Seed Data
+This task will import json files and transform them into target data for our database.
+
+All seed files live in the `seeds` folder.
+
+In our task we should have DSL to specific each seed file and its expected group word name.
+
+```json
+[
+  {
+    "kanji": "払う",
+    "romaji": "harau",
+    "english": "to pay",
+  },
+  ...
+]
+```
